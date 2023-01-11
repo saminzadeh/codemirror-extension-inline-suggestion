@@ -1,4 +1,8 @@
+# codemirror-extension-inline-suggestion
+
 This package implements inline suggestions for the CodeMirror code editor.
+
+![Screenshot](example.png)
 
 ## Install
 
@@ -7,6 +11,8 @@ npm install codemirror-extension-inline-suggestion --save
 ```
 
 ## Usage
+
+[![Edit codemirror-extension-inline-suggestion](https://img.shields.io/badge/Open%20in-CodeSandbox-blue?logo=codesandbox)](https://codesandbox.io/s/codemirror-extension-inline-suggestion-m5o8lf?fontsize=10&hidenavigation=1&theme=dark)
 
 ```tsx
 import CodeMirror from '@uiw/react-codemirror';
