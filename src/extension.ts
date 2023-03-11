@@ -18,8 +18,15 @@ import {
 } from '@codemirror/state';
 import { debouncePromise } from './lib/utils';
 
+// Splitting this up to allow  someone to display a whole sentence as a suggestion
+// while only letting the tab key insert the next word etc.
+type Suggestion = {
+  complete_suggestion: string;
+  display_suggestion: string;
+};
+
 // Current state of the autosuggestion
-const InlineSuggestionState = StateField.define<{ suggestion: null | string }>({
+const InlineSuggestionState = StateField.define<{ suggestion: null | Suggestion }>({
   create() {
     return { suggestion: null };
   },
@@ -36,7 +43,7 @@ const InlineSuggestionState = StateField.define<{ suggestion: null | string }>({
 });
 
 const InlineSuggestionEffect = StateEffect.define<{
-  text: string | null;
+  text: Suggestion | null;
   doc: Text;
 }>();
 
@@ -69,7 +76,8 @@ class InlineSuggestionWidget extends WidgetType {
   }
 }
 
-type InlineFetchFn = (state: EditorState) => Promise<string>;
+
+type InlineFetchFn = (state: EditorState) => Promise<Suggestion>;
 
 export const fetchSuggestion = (fetchFn: InlineFetchFn) =>
   ViewPlugin.fromClass(
@@ -96,16 +104,16 @@ const renderInlineSuggestionPlugin = ViewPlugin.fromClass(
       this.decorations = Decoration.none;
     }
     update(update: ViewUpdate) {
-      const suggestionText = update.state.field(
+      const suggestion: Suggestion | null = update.state.field(
         InlineSuggestionState
       )?.suggestion;
-      if (!suggestionText) {
+      if (!suggestion) {
         this.decorations = Decoration.none;
         return;
       }
       this.decorations = inlineSuggestionDecoration(
         update.view,
-        suggestionText
+        suggestion.display_suggestion
       );
     }
   },
@@ -119,19 +127,19 @@ const inlineSuggestionKeymap = Prec.highest(
     {
       key: 'Tab',
       run: (view) => {
-        const suggestionText = view.state.field(
+        const suggestion: Suggestion | null = view.state.field(
           InlineSuggestionState
         )?.suggestion;
 
         // If there is no suggestion, do nothing and let the default keymap handle it
-        if (!suggestionText) {
+        if (!suggestion) {
           return false;
         }
 
         view.dispatch({
           ...insertCompletionText(
             view.state,
-            suggestionText,
+            suggestion.complete_suggestion,
             view.state.selection.main.head,
             view.state.selection.main.head
           ),
@@ -173,13 +181,33 @@ function insertCompletionText(
 }
 
 type InlineSuggestionOptions = {
-  fetchFn: (state: EditorState) => Promise<string>;
+  fetchFn: (state: EditorState) => Promise<string | Suggestion>;
   delay?: number;
 };
 
+// This is for backwards compatibility
+function toSuggestion(suggestion: string | Suggestion): Suggestion {
+  if (typeof suggestion === 'string') {
+    return {
+      complete_suggestion: suggestion,
+      display_suggestion: suggestion,
+    };
+  }
+  return suggestion;
+}
+
+function toSuggestionFn(
+  fetchFn: (state: EditorState) => Promise<string | Suggestion>
+): InlineFetchFn {
+  return async (state: EditorState) => {
+    const suggestion = await fetchFn(state);
+    return toSuggestion(suggestion);
+  };
+}
+
 export function inlineSuggestion(options: InlineSuggestionOptions) {
   const { delay = 500 } = options;
-  const fetchFn = debouncePromise(options.fetchFn, delay);
+  const fetchFn = debouncePromise(toSuggestionFn(options.fetchFn), delay);
   return [
     InlineSuggestionState,
     fetchSuggestion(fetchFn),
