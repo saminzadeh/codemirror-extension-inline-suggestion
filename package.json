@@ -43,5 +43,8 @@
     "semi": true,
     "printWidth": 80,
     "trailingComma": "es5"
+  },
+  "dependencies": {
+    "codemirror": "^6.0.1"
   }
 }

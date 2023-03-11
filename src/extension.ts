@@ -26,18 +26,22 @@ type Suggestion = {
 };
 
 // Current state of the autosuggestion
-const InlineSuggestionState = StateField.define<{ suggestion: null | Suggestion }>({
+const InlineSuggestionState = StateField.define<{
+  suggestion: null | Suggestion;
+}>({
   create() {
     return { suggestion: null };
   },
-  update(__, tr) {
-    const inlineSuggestion = tr.effects.find((e) =>
+  update(__: any, tr: any) {
+    const inlineSuggestion = tr.effects.find((e: any) =>
       e.is(InlineSuggestionEffect)
     );
     if (tr.state.doc)
-      if (inlineSuggestion && (
-        (inlineSuggestion.value.doc == null) || (tr.state.doc == inlineSuggestion.value.doc)
-      )) {
+      if (
+        inlineSuggestion &&
+        (inlineSuggestion.value.doc == null ||
+          tr.state.doc == inlineSuggestion.value.doc)
+      ) {
         return { suggestion: inlineSuggestion.value.text };
       }
     return { suggestion: null };
@@ -78,12 +82,11 @@ class InlineSuggestionWidget extends WidgetType {
   }
 }
 
-
 type InlineFetchFn = (state: EditorState) => Promise<Suggestion>;
 
 export const fetchSuggestion = (fetchFn: InlineFetchFn) =>
   ViewPlugin.fromClass(
-    class Plugin {
+    class FetchPlugin {
       async update(update: ViewUpdate) {
         const doc = update.state.doc;
         // Only fetch if the document has changed
@@ -98,31 +101,30 @@ export const fetchSuggestion = (fetchFn: InlineFetchFn) =>
     }
   );
 
-const renderInlineSuggestionPlugin = ViewPlugin.fromClass(
-  class Plugin {
-    decorations: DecorationSet;
-    constructor() {
-      // Empty decorations
-      this.decorations = Decoration.none;
-    }
-    update(update: ViewUpdate) {
-      const suggestion: Suggestion | null = update.state.field(
-        InlineSuggestionState
-      )?.suggestion;
-      if (!suggestion) {
-        this.decorations = Decoration.none;
-        return;
-      }
-      this.decorations = inlineSuggestionDecoration(
-        update.view,
-        suggestion.display_suggestion
-      );
-    }
-  },
-  {
-    decorations: (v) => v.decorations,
+class RenderPlugin {
+  decorations: DecorationSet;
+  constructor() {
+    // Empty decorations
+    this.decorations = Decoration.none;
   }
-);
+  update(update: ViewUpdate) {
+    const suggestion: Suggestion | null = update.state.field(
+      InlineSuggestionState
+    )?.suggestion;
+    if (!suggestion) {
+      this.decorations = Decoration.none;
+      return;
+    }
+    this.decorations = inlineSuggestionDecoration(
+      update.view,
+      suggestion.display_suggestion
+    );
+  }
+}
+
+const renderInlineSuggestionPlugin = ViewPlugin.fromClass(RenderPlugin, {
+  decorations: (v: RenderPlugin) => v.decorations,
+});
 
 class inlineSuggestionKeymap {
   suggestFn: InlineFetchFn | null;
@@ -134,7 +136,7 @@ class inlineSuggestionKeymap {
       keymap.of([
         {
           key: 'Tab',
-          run: (view) => {
+          run: (view: EditorView) => {
             return this.run(view);
           },
         },
@@ -142,7 +144,7 @@ class inlineSuggestionKeymap {
     );
   }
 
-  run = async (view: EditorView) => {
+  run = (view: EditorView) => {
     const suggestion: Suggestion | null = view.state.field(
       InlineSuggestionState
     )?.suggestion;
@@ -162,17 +164,21 @@ class inlineSuggestionKeymap {
     });
 
     // Re-trigger the suggestion
-    if (this.suggestFn == null) return;
-    const result = await this.suggestFn(view.state);
-    view.dispatch({
-      effects: InlineSuggestionEffect.of({
-        text: {
-          complete_suggestion: result.complete_suggestion,
-          display_suggestion: result.display_suggestion,
-        },
-        doc: null,
-      }),
-    });
+    const retrigger = async () => {
+      if (this.suggestFn == null) return;
+      const result = await this.suggestFn(view.state);
+      view.dispatch({
+        effects: InlineSuggestionEffect.of({
+          text: {
+            complete_suggestion: result.complete_suggestion,
+            display_suggestion: result.display_suggestion,
+          },
+          doc: null,
+        }),
+      });
+    };
+    retrigger();
+
     return true;
   };
 }
@@ -241,6 +247,7 @@ export function inlineSuggestion(options: InlineSuggestionOptions) {
     InlineSuggestionState,
     fetchSuggestion(debounced_fetchFn),
     renderInlineSuggestionPlugin,
-    new inlineSuggestionKeymap(options.continue_suggesting ? fetchFn : null).keymap,
+    new inlineSuggestionKeymap(options.continue_suggesting ? fetchFn : null)
+      .keymap,
   ];
 }
