@@ -42,14 +42,14 @@ const InlineSuggestionState = StateField.define<{
         (inlineSuggestion.value.doc == null ||
           tr.state.doc == inlineSuggestion.value.doc)
       ) {
-        return { suggestion: inlineSuggestion.value.text };
+        return { suggestion: inlineSuggestion.value.suggestion };
       }
     return { suggestion: null };
   },
 });
 
 const InlineSuggestionEffect = StateEffect.define<{
-  text: Suggestion | null;
+  suggestion: Suggestion | null;
   doc: Text | null;
 }>();
 
@@ -95,7 +95,7 @@ export const fetchSuggestion = (fetchFn: InlineFetchFn) =>
         }
         const result = await fetchFn(update.state);
         update.view.dispatch({
-          effects: InlineSuggestionEffect.of({ text: result, doc: doc }),
+          effects: InlineSuggestionEffect.of({ suggestion: result, doc: doc }),
         });
       }
     }
@@ -169,7 +169,7 @@ class inlineSuggestionKeymap {
       const result = await this.suggestFn(view.state);
       view.dispatch({
         effects: InlineSuggestionEffect.of({
-          text: {
+          suggestion: {
             complete_suggestion: result.complete_suggestion,
             display_suggestion: result.display_suggestion,
           },
