@@ -20,7 +20,7 @@ import { debouncePromise } from './lib/utils';
 
 // Splitting this up to allow  someone to display a whole sentence as a suggestion
 // while only letting the tab key insert the next word etc.
-type Suggestion = {
+export type Suggestion = {
   complete_suggestion: string;
   display_suggestion: string;
 };
