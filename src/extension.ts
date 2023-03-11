@@ -35,7 +35,9 @@ const InlineSuggestionState = StateField.define<{ suggestion: null | Suggestion 
       e.is(InlineSuggestionEffect)
     );
     if (tr.state.doc)
-      if (inlineSuggestion && tr.state.doc == inlineSuggestion.value.doc) {
+      if (inlineSuggestion && (
+        (inlineSuggestion.value.doc == null) || (tr.state.doc == inlineSuggestion.value.doc)
+      )) {
         return { suggestion: inlineSuggestion.value.text };
       }
     return { suggestion: null };
@@ -44,7 +46,7 @@ const InlineSuggestionState = StateField.define<{ suggestion: null | Suggestion 
 
 const InlineSuggestionEffect = StateEffect.define<{
   text: Suggestion | null;
-  doc: Text;
+  doc: Text | null;
 }>();
 
 /**
@@ -122,33 +124,58 @@ const renderInlineSuggestionPlugin = ViewPlugin.fromClass(
   }
 );
 
-const inlineSuggestionKeymap = Prec.highest(
-  keymap.of([
-    {
-      key: 'Tab',
-      run: (view) => {
-        const suggestion: Suggestion | null = view.state.field(
-          InlineSuggestionState
-        )?.suggestion;
+class inlineSuggestionKeymap {
+  suggestFn: InlineFetchFn | null;
+  keymap: any;
 
-        // If there is no suggestion, do nothing and let the default keymap handle it
-        if (!suggestion) {
-          return false;
-        }
+  constructor(suggestFn: InlineFetchFn | null) {
+    this.suggestFn = suggestFn;
+    this.keymap = Prec.highest(
+      keymap.of([
+        {
+          key: 'Tab',
+          run: (view) => {
+            return this.run(view);
+          },
+        },
+      ])
+    );
+  }
 
-        view.dispatch({
-          ...insertCompletionText(
-            view.state,
-            suggestion.complete_suggestion,
-            view.state.selection.main.head,
-            view.state.selection.main.head
-          ),
-        });
-        return true;
-      },
-    },
-  ])
-);
+  run = async (view: EditorView) => {
+    const suggestion: Suggestion | null = view.state.field(
+      InlineSuggestionState
+    )?.suggestion;
+
+    // If there is no suggestion, do nothing and let the default keymap handle it
+    if (!suggestion) {
+      return false;
+    }
+
+    view.dispatch({
+      ...insertCompletionText(
+        view.state,
+        suggestion.complete_suggestion,
+        view.state.selection.main.head,
+        view.state.selection.main.head
+      ),
+    });
+
+    // Re-trigger the suggestion
+    if (this.suggestFn == null) return;
+    const result = await this.suggestFn(view.state);
+    view.dispatch({
+      effects: InlineSuggestionEffect.of({
+        text: {
+          complete_suggestion: result.complete_suggestion,
+          display_suggestion: result.display_suggestion,
+        },
+        doc: null,
+      }),
+    });
+    return true;
+  };
+}
 
 function insertCompletionText(
   state: EditorState,
@@ -183,6 +210,7 @@ function insertCompletionText(
 type InlineSuggestionOptions = {
   fetchFn: (state: EditorState) => Promise<string | Suggestion>;
   delay?: number;
+  continue_suggesting?: boolean;
 };
 
 // This is for backwards compatibility
@@ -207,11 +235,12 @@ function toSuggestionFn(
 
 export function inlineSuggestion(options: InlineSuggestionOptions) {
   const { delay = 500 } = options;
-  const fetchFn = debouncePromise(toSuggestionFn(options.fetchFn), delay);
+  const fetchFn = toSuggestionFn(options.fetchFn);
+  const debounced_fetchFn = debouncePromise(fetchFn, delay);
   return [
     InlineSuggestionState,
-    fetchSuggestion(fetchFn),
+    fetchSuggestion(debounced_fetchFn),
     renderInlineSuggestionPlugin,
-    inlineSuggestionKeymap,
+    new inlineSuggestionKeymap(options.continue_suggesting ? fetchFn : null).keymap,
   ];
 }
