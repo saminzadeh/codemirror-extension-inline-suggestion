@@ -32,6 +32,7 @@ function App() {
         inlineSuggestion({
           fetchFn: inlineSuggestion,
           delay: 1000,
+          continue_suggesting: true,
         }),
       ]}
     />
