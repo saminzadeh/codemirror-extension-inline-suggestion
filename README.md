@@ -29,8 +29,8 @@ function App() {
       value=""
       height="200px"
       extensions={[
-        fetchSuggestion({
-          fetchFn: inlineSuggestion,
+        inlineSuggestion({
+          fetchFn: fetchSuggestion,
           delay: 1000,
         }),
       ]}
