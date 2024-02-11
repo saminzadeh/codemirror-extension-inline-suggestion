@@ -67,6 +67,9 @@ class InlineSuggestionWidget extends WidgetType {
     div.textContent = this.suggestion;
     return div;
   }
+  get lineBreaks() {
+    return this.suggestion.split('\n').length - 1;
+  }
 }
 
 type InlineFetchFn = (state: EditorState) => Promise<string>;
